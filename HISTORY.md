@@ -1,6 +1,11 @@
 # History
 
 
+## 2014-11-05, version 0.3.1
+
+- Module renamed to `typed-function`.
+
+
 ## 2014-11-05, version 0.3.0
 
 - Implemented support for anytype arguments (denoted with `*`).
