@@ -27,7 +27,7 @@ describe('construction', function() {
     });
 
     assert.equal(fn('bar'), 'foo');
-    assert.equal(fn.name, '');
+    assert.equal(fn.name, 'anonymous');
   });
 
   it('should inherit the name of the function implementation', function() {

@@ -1,5 +1,9 @@
 # History
 
+## 2015-03-08, version 0.6.4
+
+- Implemented configuration option `expandConversions`.
+
 ## 2015-03-08, version 0.6.3
 
 - Fixed generated internal Signature and Param objects not being cleaned up

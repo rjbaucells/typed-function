@@ -144,6 +144,25 @@ The following type expressions are supported:
 - Any type: `any`
 
 
+## Configuration
+
+Configuration can be set directly on the `config` property of `typed`:
+
+```js
+// load typed=function
+var typed = require('typed-function');
+
+// set configuration
+typed.config.expandConversions = true;
+```
+
+typed-function has the following configuration options:
+
+Name              | Type    | Default | Description
+----------------- | ------- | ------- | -----------
+expandConversions | boolean | true    | If false, conversions will convert the concerning argument and recursively call the function again. When true (default), all matching signatures will be expanded for each conversion. This gives better performance for calls requiring conversions, but also requires more memory.
+
+
 ## API
 
 ### Construction

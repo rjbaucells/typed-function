@@ -98,6 +98,38 @@
   }
 
   /**
+   * Replace a value in an array, return a shallow copy of the array with
+   * the replaced entry.
+   * @param {Array} array
+   * @param {number} index
+   * @param {*} value
+   * @return {Array}
+   */
+  function replace(array, index, value) {
+    var copy = [];
+    for (var i = 0; i < array.length; i++) {
+      copy[i] = array[i];
+    }
+    copy[index] = value;
+    return copy;
+  }
+
+  /**
+   * Invoke a function with given arguments
+   * @param {function} fn
+   * @param {Array} args
+   * @return {*}
+   */
+  function invoke(fn, args) {
+    if (args.length === 0) return fn();
+    if (args.length === 1) return fn(args[0]);
+    if (args.length === 2) return fn(args[0], args[1]);
+    if (args.length === 3) return fn(args[0], args[1], args[2]);
+
+    return fn.apply(fn, args);
+  }
+
+  /**
    * Collection with function references (local shortcuts to functions)
    * @constructor
    * @param {string} [name='refs']  Optional name for the refs, used to generate
@@ -272,14 +304,35 @@
    * @returns {string}
    */
   Param.prototype.toString = function (toConversion) {
-    var types = this.types
-        .map(function (type, i) {
-          var conversion = this.conversions[i];
-          return toConversion && conversion ? conversion.to : type;
-        }.bind(this))
-        .filter(function (type, i, types) {
-          return types.indexOf(type) === i;  // dedupe array
-        });
+    // TODO: cleanup when performance problem is solved
+    //var types = this.types
+    //    .map(function (type, i) {
+    //      var conversion = this.conversions[i];
+    //      return toConversion && conversion ? conversion.to : type;
+    //    }.bind(this))
+    //    .filter(function (type, i, types) {
+    //      return types.indexOf(type) === i;  // dedupe array
+    //    });
+
+    var types = [];
+    var len = this.types.length;
+
+    if (len === 1) {
+      var conversion = this.conversions[0];
+      types.push(toConversion && conversion ? conversion.to : this.types[0]);
+    }
+    else {
+      var handled = {}; // handled types
+
+      for (var i = 0; i < len; i++) {
+        var type = this.types[i];
+        if (!handled[type]) {
+          handled[type] = true;
+          conversion = this.conversions[i];
+          types.push(toConversion && conversion ? conversion.to : type);
+        }
+      }
+    }
 
     return (this.varArgs ? '...' : '') + types.join('|');
   };
@@ -362,7 +415,7 @@
         else {
           // split each type in the parameter
           param.types.forEach(function (type) {
-            recurse(signature, path.concat(new Param(type)));
+            recurse(signature, path.concat(type instanceof Param ? type : new Param(type)));
           });
 
           // recurse for all conversions
@@ -484,11 +537,12 @@
   /**
    * Generate code for this group of signatures
    * @param {Refs} refs
+   * @param {string} name    Function name
    * @param {string} prefix
    * @param {Node | undefined} [anyType]  Sibling of this node with any type parameter
    * @returns {string} Returns the code as string
    */
-  Node.prototype.toCode = function (refs, prefix, anyType) {
+  Node.prototype.toCode = function (refs, name, prefix, anyType) {
     // TODO: split this function in multiple functions, it's too large
     var code = [];
 
@@ -499,7 +553,6 @@
           (conversion.from + ' (convert to ' + conversion.to + ')') :
           this.param);
 
-      // non-root node (path is non-empty)
       if (this.param.varArgs) {
         if (this.param.anyType) {
           // variable arguments with any type
@@ -553,7 +606,7 @@
         if (this.param.anyType) {
           // any type
           code.push(prefix + '// type: any');
-          code.push(this._innerCode(refs, prefix, anyType));
+          code.push(this._innerCode(refs, name, prefix, anyType));
         }
         else {
           // regular type
@@ -561,14 +614,20 @@
           var test = type !== 'any' ? refs.add(getTypeTest(type), 'test') : null;
 
           code.push(prefix + 'if (' + test + '(arg' + index + ')) { ' + comment);
-          code.push(this._innerCode(refs, prefix + '  ', anyType));
+          if (conversion && !config.expandConversions) {
+            var convert = refs.add(conversion.convert, 'convert') + '(arg' + index + ')';
+            code.push(prefix + '  return invoke(' + name + ', replace(arguments, ' + index + ', ' + convert + '));');
+          }
+          else {
+            code.push(this._innerCode(refs, name, prefix + '  ', anyType));
+          }
           code.push(prefix + '}');
         }
       }
     }
     else {
       // root node (path is empty)
-      code.push(this._innerCode(refs, prefix, anyType));
+      code.push(this._innerCode(refs, name, prefix, anyType));
     }
 
     return code.join('\n');
@@ -578,12 +637,13 @@
    * Generate inner code for this group of signatures.
    * This is a helper function of Node.prototype.toCode
    * @param {Refs} refs
+   * @param {string} name
    * @param {string} prefix
    * @param {Node | undefined} [anyType]  Sibling of this node with any type parameter
    * @returns {string} Returns the inner code as string
    * @private
    */
-  Node.prototype._innerCode = function(refs, prefix, anyType) {
+  Node.prototype._innerCode = function(refs, name, prefix, anyType) {
     var code = [];
 
     if (this.signature) {
@@ -597,11 +657,11 @@
     })[0];
 
     this.childs.forEach(function (child) {
-      code.push(child.toCode(refs, prefix, nextAnyType));
+      code.push(child.toCode(refs, name, prefix, nextAnyType));
     });
 
     if (anyType && !this.param.anyType) {
-      code.push(anyType.toCode(refs, prefix, nextAnyType));
+      code.push(anyType.toCode(refs, name, prefix, nextAnyType));
     }
 
     var exceptions = this._exceptions(refs, prefix);
@@ -830,10 +890,10 @@
 
     // generate code for the typed function
     var code = [];
-    var _name = name || '';
+    var _name = name || 'anonymous';
     var _args = getArgs(maxParams(_signatures));
     code.push('function ' + _name + '(' + _args.join(', ') + ') {');
-    code.push(node.toCode(refs, '  '));
+    code.push(node.toCode(refs, _name, '  '));
     code.push('}');
 
     // generate code for the factory function
@@ -913,7 +973,9 @@
   }
 
   // configuration
-  var config = {};
+  var config = {
+    expandConversions: true
+  };
 
   // type conversions. Order is important
   var conversions = [];
@@ -980,7 +1042,7 @@
         }
 
         // merge function name
-        if (fn.name != '') {
+        if (fn.name != '' && fn.name != 'anonymous') {
           if (name == '') {
             name = fn.name;
           }
