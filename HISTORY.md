@@ -1,5 +1,21 @@
 # History
 
+## not yet released, version 0.8.0
+
+- Implemented function `create` to create a new instance of typed-function.
+
+
+## 2015-04-17, version 0.7.0
+
+- Performance improvements.
+
+
+## 2015-03-08, version 0.6.3
+
+- Fixed generated internal Signature and Param objects not being cleaned up
+  after the typed function has been generated.
+
+
 ## 2015-02-26, version 0.6.2
 
 - Fixed a bug sometimes not ordering the handling of any type arguments last.
